@@ -11,6 +11,8 @@ def query_string(type,key,value,coords):
      return(type+"['"+key+"'='"+value+"']"+coords+";out;")
 
 coast_query = "(way['natural'='coastline'](-38.808,175.152,-37.462,177.358);>;);out;"
+lake_query = "(relation['natural'='water'](-38.808,175.152,-37.462,177.358);>;);out;"
+small_lake_query = "(way['natural'='water']['name'~'^Lake'](-38.808,175.152,-37.462,177.358);>;);out;"
 
 query = ""
 for t in range(len(map_points_type)):
@@ -20,9 +22,13 @@ import urllib2
 
 
 data_coast = urllib2.urlopen(url+coast_query)
+data_lakes = urllib2.urlopen(url+lake_query)
+data_small_lakes = urllib2.urlopen(url+small_lake_query)
 data_towns = urllib2.urlopen(url+query)
 xml_nodes = data_towns.read()
 xml_coast = data_coast.read()
+xml_lakes = data_lakes.read()
+xml_small_lakes = data_small_lakes.read()
 
 import xml.etree.ElementTree as xml
 
@@ -53,6 +59,31 @@ for w in root.findall("way"):
         coast_lines[counter].append(int(n.attrib["ref"]))
     counter += 1
 
+lake_nodes = {}
+lake_lines = {}
+lake_rels = {}
+root = xml.fromstring(xml_lakes)
+for n in root.findall("node"):
+    lake_nodes[int(n.attrib["id"])] = {"x":float(n.attrib["lon"]),"y":float(n.attrib["lat"])}
+counter = 0
+for w in root.findall("way"):
+    lake_lines[counter] = []
+    for n in w.findall("nd"):
+        lake_lines[counter].append(int(n.attrib["ref"]))
+    counter += 1
+
+small_lake_nodes = {}
+small_lake_lines = {}
+root = xml.fromstring(xml_small_lakes)
+for n in root.findall("node"):
+    small_lake_nodes[int(n.attrib["id"])] = {"x":float(n.attrib["lon"]),"y":float(n.attrib["lat"])}
+counter = 0
+for w in root.findall("way"):
+    small_lake_lines[counter] = []
+    for n in w.findall("nd"):
+        small_lake_lines[counter].append(int(n.attrib["ref"]))
+    counter += 1
+
 from direct.showbase.ShowBase import ShowBase
 from TimCam import TimCam
 from pandac.PandaModules import NodePath, TextNode, TransparencyAttrib, GeomNode
@@ -67,6 +98,8 @@ class MapGen(ShowBase):
         self.place_markers(nodes)
         self.line_coast()
         self.line_border()
+        self.line_lakes()
+        self.line_small_lakes()
 
     def place_markers(self,nodes):
         for n in range(len(nodes)):
@@ -103,7 +136,38 @@ class MapGen(ShowBase):
             for n in range(len(coast_lines[l])):
                 x = (coast_nodes[coast_lines[l][n]]["x"]-map_center[0])*amplification
                 y = (coast_nodes[coast_lines[l][n]]["y"]-map_center[1])*amplification
-                print x,y
+                if n == 0:
+                    line.moveTo(x,y,0)
+                else:
+                    line.drawTo(x,y,0)
+            line_node = line.create()
+            node_path = NodePath(line_node)
+            node_path.reparentTo(render)
+
+    def line_lakes(self):
+        for l in range(len(lake_lines)):
+            line = LineSegs()
+            line.setColor(0,0,0, 1)
+            line.setThickness(2)
+            for n in range(len(lake_lines[l])):
+                x = (lake_nodes[lake_lines[l][n]]["x"]-map_center[0])*amplification
+                y = (lake_nodes[lake_lines[l][n]]["y"]-map_center[1])*amplification
+                if n == 0:
+                    line.moveTo(x,y,0)
+                else:
+                    line.drawTo(x,y,0)
+            line_node = line.create()
+            node_path = NodePath(line_node)
+            node_path.reparentTo(render)
+
+    def line_small_lakes(self):
+        for l in range(len(small_lake_lines)):
+            line = LineSegs()
+            line.setColor(0,0,0, 1)
+            line.setThickness(2)
+            for n in range(len(small_lake_lines[l])):
+                x = (small_lake_nodes[small_lake_lines[l][n]]["x"]-map_center[0])*amplification
+                y = (small_lake_nodes[small_lake_lines[l][n]]["y"]-map_center[1])*amplification
                 if n == 0:
                     line.moveTo(x,y,0)
                 else:
